@@ -1,44 +1,70 @@
 #[cfg(test)]
-mod tests {
+mod tests_lexer {
     use crate::token::Token;
     use crate::lexer::Lexer;
 
     #[test]
     fn test_if_else() {
-        // Create a sample input string
-        let input = "tests/test_if_else.oxi";
-
-        // Create a lexer instance with the sample input string
+        let input = "tests/lexer/test_if_else.oxi";
         let lexer = Lexer::new(&input.to_string());
-
-        // Call the lex method to tokenize the input string
         let tokens = lexer.lex();
-
-        // Define the expected tokens based on the input string
         let expected_tokens = vec![
             Token::Keyword(1, 1, "if".to_string()),
-            Token::Seperator(1, 3, '('),
+            Token::Seperator(1, 4, '('),
             Token::Identifier(1, 5, "x".to_string()),
-            Token::Operator(1, 6, ">".to_string()),
+            Token::Operator(1, 7, ">".to_string()),
             Token::IntLit(1, 9, "0".to_string()),
-            Token::Seperator(1, 11, ')'),
-            Token::Seperator(1, 13, '{'),
-            Token::Keyword(1, 15, "ret".to_string()),
-            Token::Keyword(1, 23, "true".to_string()),
-            Token::Seperator(1, 27, ';'),
-            Token::Seperator(1, 29, '}'),
-            Token::Keyword(1, 31, "else".to_string()),
-            Token::Seperator(1, 36, '{'),
-            Token::Keyword(1, 38, "return".to_string()),
-            Token::Keyword(1, 46, "false".to_string()),
-            Token::Seperator(1, 51, ';'),
-            Token::Seperator(1, 53, '}'),
+            Token::Seperator(1, 10, ')'),
+            Token::Seperator(1, 12, '{'),
+            Token::Keyword(1, 14, "ret".to_string()),
+            Token::Keyword(1, 18, "true".to_string()),
+            Token::Seperator(1, 22, ';'),
+            Token::Seperator(1, 24, '}'),
+            Token::Keyword(1, 26, "else".to_string()),
+            Token::Seperator(1, 31, '{'),
+            Token::Keyword(1, 33, "ret".to_string()),
+            Token::Keyword(1, 37, "false".to_string()),
+            Token::Seperator(1, 42, ';'),
+            Token::Seperator(1, 44, '}'),
             Token::Eof,
         ];
-
-        println!("{:#?}", tokens);
-
-        // Assert that the actual tokens match the expected tokens
         assert_eq!(tokens, expected_tokens);
     }
+
+    #[test]
+    fn test_if() {
+        let input = "tests/lexer/test_if.oxi";
+        let lexer = Lexer::new(&input.to_string());
+        let tokens = lexer.lex();
+        let expected_tokens = vec![
+            Token::Keyword(1, 1, "if".to_string()),
+            Token::Seperator(1, 4, '('),
+            Token::Identifier(1, 5, "x".to_string()),
+            Token::Operator(1, 7, ">".to_string()),
+            Token::IntLit(1, 9, "0".to_string()),
+            Token::Seperator(1, 10, ')'),
+            Token::Seperator(1, 12, '{'),
+            Token::Keyword(1, 14, "ret".to_string()),
+            Token::IntLit(1, 18, "0".to_string()),
+            Token::Seperator(1, 19, ';'),
+            Token::Seperator(1, 21, '}'),
+            Token::Eof
+        ];
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_string() {
+        let lexer = Lexer::new(&"tests/lexer/test_string.oxi".to_string());
+        let tokens = lexer.lex();
+
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(
+            tokens[0],
+            Token::StringLit(1, 3, r#"\u001b[32;m"#.to_string())
+        );
+        assert_eq!(tokens[1], Token::StringLit(2,18,String::from("\"x")));
+        assert_eq!(tokens[2], Token::Eof);
+    }
+
 }

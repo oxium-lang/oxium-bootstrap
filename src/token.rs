@@ -6,6 +6,8 @@ pub enum Token {
     Identifier(usize, usize, String),
     IntLit(usize, usize, String),
     FlLit(usize, usize, String),
+    StringLit(usize, usize, String),
+    CharLit(usize, usize, char),
     Seperator(usize, usize, char),
     Eof,
 }

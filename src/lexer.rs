@@ -1,5 +1,5 @@
 use std::fs;
-use crate::token::Token;
+use crate::{print::PrintGlobalState, token::Token};
 
 pub struct Lexer {
     line: usize,
@@ -7,6 +7,7 @@ pub struct Lexer {
     tokens: Vec<Token>,
     file: String,
     file_name: String,
+    print: PrintGlobalState
 }
 
 impl Lexer {
@@ -20,6 +21,7 @@ impl Lexer {
             tokens: Vec::new(),
             file: file_content,
             file_name: file_name.to_string(),
+            print: PrintGlobalState::new()
         }
     }
 
@@ -68,12 +70,10 @@ impl Lexer {
     }
 
     fn number(&mut self) {
-        let mut string = String::new();
+        let mut string : String = String::new();
 
-        // Check if the string contains any numeric characters
-        let contains_numeric_chars = self.file[self.col..].chars().any(|c| c.is_digit(10) || c == '.');
+        let contains_numeric_chars : bool = self.file[self.col..].chars().any(|c| c.is_digit(10) || c == '.');
 
-        // If there are no numeric characters, return early
         if !contains_numeric_chars {
             return;
         }
@@ -86,7 +86,6 @@ impl Lexer {
                 },
 
                 'x' => {
-                    // Check if it's a hexadecimal number
                     if string == "0" {
                         string.push(c);
                         self.advance();
@@ -100,11 +99,9 @@ impl Lexer {
                 },
 
                 'e' | 'E' => {
-                    // Check if it's scientific notation
                     string.push(c);
                     self.advance();
 
-                    // Check for optional sign
                     if let Some(next_c) = self.current() {
                         if next_c == '+' || next_c == '-' {
                             string.push(next_c);
@@ -117,72 +114,209 @@ impl Lexer {
             }
         }
 
-        // Parse the string to a numeric value and check it
-        if let Ok(_num) = string.parse::<f64>() {
-            if let Ok(_u) = string.parse::<u128>() { 
+        if let Ok(_) = string.parse::<f64>() {
+            if let Ok(_) = string.parse::<u128>() { 
                 self.tokens.push(Token::IntLit(self.line, self.col - string.len(), string));
-            } else if let Ok(_i) = string.parse::<i128>() {
+            } else if let Ok(_) = string.parse::<i128>() {
                 self.tokens.push(Token::IntLit(self.line, self.col - string.len(), string));
             } else {
                 self.tokens.push(Token::FlLit(self.line, self.col - string.len(), string));
             }
         } else {
-            eprintln!("Invalid number format at {}:{}", self.line, self.col - string.len());
+            eprintln!("Invalid number format at {}:{}", self.line, self.col  - string.len());
         }
     }
 
     pub fn lex(mut self) -> Vec<Token> {
         while self.col < self.file.len() {
             match self.current() {
-                // Handle all the identifiers/keywords and data types together
-                // Implement the logic in keyword_or_identifier()
                 Some(c) if c.is_ascii_alphabetic() || c == '_' => {
                     self.keyword_or_datatype_or_identifier();
                 },
 
-                // Handle numbers
                 Some(c) if c.is_digit(10) => {
                     self.number();
                 },
 
-                // Handle operators and separators
                 Some(';') | Some(',') | Some('{') | Some('}') | Some('[') | Some(']') | Some('(') | Some(')') => {
-                    self.tokens.push(Token::Seperator(self.line, self.col, self.current().unwrap()));
+                    self.tokens.push(Token::Seperator(
+                        self.line, 
+                        self.col, 
+                        self.current().unwrap()
+                    ));
                     self.advance();
                 },
 
-                Some('>') | Some('<') | Some('=') | Some('!') | Some('^') | Some('|') | Some('&') => {
+                Some('>') | Some('<') | Some('=') | Some('!') | Some('^') | Some('|') | Some('&')
+                | Some('+') | Some('-') | Some('*') | Some('/') | Some('%') => {
                     if self.current() == Some('>') && self.peek() == Some('>') {
-                        self.tokens.push(Token::Operator(self.line, self.col, self.file[self.col..=self.col + 1].to_string()));
-                        self.advance(); // Move to the next character
+                        self.tokens.push(Token::Operator(
+                            self.line,
+                            self.col,
+                            self.file[self.col..=self.col + 1].to_string(),
+                        ));
+                        self.advance();
+                        self.advance();
                     } else if self.current() == Some('<') && self.peek() == Some('<') {
-                        self.tokens.push(Token::Operator(self.line, self.col, self.file[self.col..=self.col + 1].to_string()));
-                        self.advance(); // Move to the next character
+                        self.tokens.push(Token::Operator(
+                            self.line,
+                            self.col,
+                            self.file[self.col..=self.col + 1].to_string(),
+                        ));
+                        self.advance();
+                        self.advance();
                     } else if self.peek() == Some('=') {
-                        self.tokens.push(Token::Operator(self.line, self.col, self.file[self.col..=self.col + 1].to_string()));
-                        self.advance(); // Move to the next character
+                        self.tokens.push(Token::Operator(
+                            self.line,
+                            self.col,
+                            self.file[self.col..=self.col + 1].to_string(),
+                        ));
+                        self.advance();
+                        self.advance();
                     } else {
-                        self.tokens.push(Token::Operator(self.line, self.col, self.current().unwrap().to_string()));
+                        self.tokens.push(Token::Operator(
+                            self.line,
+                            self.col + 1,
+                            self.current().unwrap().to_string(),
+                        ));
+                        self.advance();
                     }
-                    self.advance();
                 },
 
-                // Ignore whitespace 
                 Some(' ') | Some('\t') | Some('\r') => {
                     self.advance();
-                }
+                },
 
-                // Newline, increment line counter.
+                Some('"') => {
+                    self.advance();
+                    let mut string = String::new();
+                
+                    while let Some(c) = self.current() {
+                        if c == '\\' {
+                            self.advance();
+                
+                            if let Some(escaped_char) = self.current() {
+                                match escaped_char {
+                                    '\\' | '\'' | '"' | 'n' | 'r' | 't' => {
+                                        string.push(escaped_char);
+                                        self.advance();
+                                    },
+                                    'u' => {
+                                        self.advance();
+                
+                                        let mut unicode_sequence = String::new();
+                                        let mut valid_unicode = true;
+                                        for _ in 0..4 {
+                                            if let Some(unicode_char) = self.current() {
+                                                if unicode_char.is_ascii_hexdigit() {
+                                                    unicode_sequence.push(unicode_char);
+                                                    self.advance();
+                                                } else {
+                                                    valid_unicode = false;
+                                                    break;
+                                                }
+                                            } else {
+                                                valid_unicode = false;
+                                                break;
+                                            }
+                                        }
+                
+                                        if valid_unicode {
+                                            if let Ok(unicode_char) = u32::from_str_radix(&unicode_sequence, 16) {
+                                                if let Some(unicode) = std::char::from_u32(unicode_char) {
+                                                    string.push(unicode);
+                                                } else {
+                                                    self.print.error("Invalid unicode sequence.", self.line, self.col - unicode_sequence.len(), &self.file);
+                                                }
+                                            } else {
+                                               self.print.error("Invalid unicode sequence.", self.line, self.col - unicode_sequence.len(), &self.file);
+                                            }
+                                        } else {
+                                           self.print.error("Invalid unicode sequence.", self.line, self.col - unicode_sequence.len(), &self.file);
+                                        }
+                                    },
+                                    _ => {
+                                       self.print.error("Invalid unicode sequence.", self.line, self.col - 1, &self.file);
+                                    }
+                                }
+                            } else {
+                               self.print.error("Invalid escape sequence.", self.line, self.col - 1, &self.file);
+                            }
+                        } else if c == '"' {
+                            self.advance();
+                            break;
+                        } else {
+                            string.push(c);
+                            self.advance();
+                        }
+                    }
+                
+                    self.tokens.push(Token::StringLit(self.line, self.col - string.len(), string));
+                },                
+
+                Some('\'') => {
+                    self.advance();
+                
+                    if let Some(c) = self.current() {
+                        if c == '\\' {
+                            self.advance();
+                
+                            if let Some(escaped_char) = self.current() {
+                                match escaped_char {
+                                    '\\' | '\'' | '"' | 'n' | 'r' | 't' => {
+                                        self.advance();
+                                        self.tokens.push(Token::CharLit(self.line, self.col - 3, escaped_char));
+                                    },
+                                    'u' => {
+                                        self.advance();
+                                        let mut unicode_hex = String::new();
+                
+                                        while let Some(hex_char) = self.current() {
+                                            if hex_char.is_digit(16) {
+                                                unicode_hex.push(hex_char);
+                                                self.advance();
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                
+                                        if let Ok(unicode_value) = u32::from_str_radix(&unicode_hex, 16) {
+                                            if let Some(unicode_char) = std::char::from_u32(unicode_value) {
+                                                self.tokens.push(Token::CharLit(self.line, self.col - 6, unicode_char));
+                                            } else {
+                                               self.print.error("Invalid Unicode code point.", self.line, self.col - unicode_hex.len() - 3, &self.file);
+                                            }
+                                        } else {
+                                           self.print.error("Invalid Unicode escape sequence.", self.line, self.col - unicode_hex.len() - 3, &self.file);
+                                        }
+                                    },
+                                    _ => {
+                                       self.print.error("Invalid escape sequence.", self.line, self.col - 1, &self.file);
+                                        self.advance();
+                                    }
+                                }
+                            } else {
+                                eprintln!("Incomplete escape sequence at {}:{}", self.line, self.col - 1);
+                            }
+                        } else {
+                            self.advance();
+                            self.tokens.push(Token::CharLit(self.line, self.col - 2, c));
+                        }
+                    } else {
+                        eprintln!("Incomplete character literal at {}:{}", self.line, self.col - 1);
+                    }
+                },                
+
                 Some('\n') => {
                     self.line += 1;
                     self.advance();
-                }
+                },
 
                 _ => {
                     eprintln!("Unexpected character '{}' found at {}:{} of {}.",
                         self.current().unwrap(),
                         self.line,
-                        self.col,
+                        self.col + 1,
                         self.file_name
                     );
                     self.tokens.push(Token::Seperator(self.line, self.col, self.current().unwrap()));
